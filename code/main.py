@@ -1,13 +1,17 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 
-# 1. 원본 데이터 불러오기 (3줄짜리 병합 헤더 건너뛰고 4번째 줄부터 데이터로 읽음)
-# 파일이 data 폴더 안에 있으므로 경로를 'data/파일이름.xlsx'로 지정합니다.
+# --- 1. 웹 화면에 제목과 설명 출력하기 ---
+st.title("닭강정 팀 프로젝트")
+st.header("처벌이 강할수록 범죄가 정말 줄어들까?")
+st.write("공소청 2024년 전과자 재범기간 데이터를 전처리한 결과입니다.")
+
+# --- 2. 데이터 불러오기 및 전처리 (기존과 동일) ---
 filepath = 'data/전과자_재범기간_및_종류_20261125122139.xlsx'
 df_raw = pd.read_excel(filepath, sheet_name='데이터', header=None)
 data = df_raw.iloc[3:].copy().reset_index(drop=True)
 
-# 2. 다루기 쉽게 열 이름(컬럼명) 다시 짓기
 cols = [
     '범죄별_1', '범죄별_2', '범죄별_3',
     '합계',
@@ -16,32 +20,29 @@ cols = [
 ]
 data.columns = cols
 
-# 3. 데이터 구멍(셀 병합으로 인한 빈칸) 및 표기 흔들림 처리
-# 병합되어 뚫린 대분류/중분류 빈칸을 위에서 아래로 채우기
 data['범죄별_1'] = data['범죄별_1'].ffill()
 data['범죄별_2'] = data['범죄별_2'].ffill()
 
-# '-'로 표기된 0명 데이터를 숫자 0으로 바꾸고 모두 숫자형(float/int)으로 변환
 for c in cols[3:]:
     data[c] = pd.to_numeric(data[c].replace('-', 0), errors='coerce').fillna(0)
 
-# 4. 뺄 값과 남길 값 적용 (중복 집계되는 소계 거르고 세부 범죄만 남기기)
-# 형법범은 범죄별_3이 '소계'가 아닌 것, 특별법범은 범죄별_2가 '소계'가 아닌 것만 '최하위 세부 범죄'로 판단
 is_leaf = (
     ((data['범죄별_1'] == '형법범') & (data['범죄별_3'] != '소계')) |
     ((data['범죄별_1'] == '특별법범') & (data['범죄별_2'] != '소계'))
 )
 
-# 세부 범죄이면서 재범자 합계가 0명 초과인 범죄만 남김 (기타 1건 삭제됨 -> 총 110개)
 leaves = data[is_leaf & (data['합계'] > 0)].copy().reset_index(drop=True)
-
-# 시각화 및 군집 확인을 위해 범죄명 열을 하나로 깔끔하게 정리
 leaves['범죄명'] = np.where(leaves['범죄별_3'] != '소계', leaves['범죄별_3'], leaves['범죄별_2'])
 
-# 5. 이상값 편차 통제를 위한 비율 파생 변수 만들기
-# 인원수 차이가 군집을 왜곡하지 않도록 (해당 기간 재범자 / 해당 범죄 총 재범자) 비율 계산
 leaves['동종재범률'] = leaves['동종_소계'] / leaves['합계']
 
+leaves['단기1년재범률'] = (
+    leaves['동종_1개월이내'] + leaves['동종_3개월이내'] + leaves['동종_6개월이내'] + leaves['동종_1년이내'] +
+    leaves['이종_1개월이내'] + float(0) if leaves['합계'].sum() == 0 else
+    leaves['이종_3개월이내'] + leaves['이종_6개월이내'] + leaves['이종_1년이내']
+) / leaves['합계']
+
+# 위의 식을 더 간결하고 안전하게 계산
 leaves['단기1년재범률'] = (
     leaves['동종_1개월이내'] + leaves['동종_3개월이내'] + leaves['동종_6개월이내'] + leaves['동종_1년이내'] +
     leaves['이종_1개월이내'] + leaves['이종_3개월이내'] + leaves['이종_6개월이내'] + leaves['이종_1년이내']
@@ -49,9 +50,9 @@ leaves['단기1년재범률'] = (
 
 leaves['장기3년초과재범률'] = (leaves['동종_3년초과'] + leaves['이종_3년초과']) / leaves['합계']
 
-# 분석에 사용할 최종 데이터 확인 (110행)
 features = ['범죄명', '합계', '동종재범률', '단기1년재범률', '장기3년초과재범률']
 df_final = leaves[features].copy()
 
-# 데이터가 잘 처리되었는지 확인용 출력 (선택 사항)
-print(df_final.head())
+# --- 3. 웹 화면에 표(데이터프레임) 그려주기 ---
+st.subheader("전처리 완료된 데이터 (최종 110개 범죄)")
+st.dataframe(df_final)
