@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 
 # 1. 원본 데이터 불러오기 (3줄짜리 병합 헤더 건너뛰고 4번째 줄부터 데이터로 읽음)
-filepath = '전과자_재범기간_및_종류_20261125122139.xlsx'
+# 파일이 data 폴더 안에 있으므로 경로를 'data/파일이름.xlsx'로 지정합니다.
+filepath = 'data/전과자_재범기간_및_종류_20261125122139.xlsx'
 df_raw = pd.read_excel(filepath, sheet_name='데이터', header=None)
 data = df_raw.iloc[3:].copy().reset_index(drop=True)
 
@@ -51,3 +52,6 @@ leaves['장기3년초과재범률'] = (leaves['동종_3년초과'] + leaves['이
 # 분석에 사용할 최종 데이터 확인 (110행)
 features = ['범죄명', '합계', '동종재범률', '단기1년재범률', '장기3년초과재범률']
 df_final = leaves[features].copy()
+
+# 데이터가 잘 처리되었는지 확인용 출력 (선택 사항)
+print(df_final.head())
